@@ -647,7 +647,7 @@ WL_read_messages()
     {
         mavlink_message_t message;
         success = WL_port->read_message(message);
-        if ((message.sysid != 255)&&(message.sysid != Machine_Num))
+        if ((message.sysid != 0)&&(message.sysid != Machine_Num))
         {
             break;
         }
