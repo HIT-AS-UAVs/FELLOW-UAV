@@ -82,8 +82,8 @@ top (int argc, char **argv)
 #ifdef __APPLE__
     char *uart_name = (char*)"/dev/tty.usbmodem1";
 #else
-    char *uart_name = (char*)"/dev/ttyTHS2";
-    char *WL_uart = (char*)"/dev/ttyS0";
+    char *uart_name = (char*)"/dev/ttyUSB0";
+    char *WL_uart = (char*)"/dev/ttyUSB1";
 #endif
     int baudrate = 57600;
 
@@ -215,7 +215,7 @@ commands(Autopilot_Interface &api)
         }
         else
         {
-            usleep(500);
+            usleep(200000);
         }
     }
     api.enable_offboard_control();

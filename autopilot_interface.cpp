@@ -647,7 +647,7 @@ WL_read_messages()
     {
         mavlink_message_t message;
         success = WL_port->read_message(message);
-        if ((message.sysid != 0)&&(message.sysid != Machine_Num))
+        if ((message.sysid != 255)&&(message.sysid != Machine_Num))
         {
             break;
         }
@@ -655,6 +655,7 @@ WL_read_messages()
         {
             Inter_message.sysid  = message.sysid;
             Inter_message.compid = message.compid;
+			printf("uart2 is succeed!\n");
             switch (message.msgid)
             {
                 case MAVLINK_MSG_ID_HEARTBEAT:
@@ -678,16 +679,16 @@ WL_read_messages()
                 case MAVLINK_MSG_ID_COMMAND_LONG:
                 {
                     printf("MAVLINK_MSG_ID_COMMAND_LONG\n");
-                    mavlink_msg_command_long_decode(&message, &(current_messages.command_long));
-                    std::cout<<"command:"<<current_messages.command_long.command<<std::endl
+                    mavlink_msg_command_long_decode(&message, &(Inter_message.command_long));
+                    std::cout<<"command:"<<Inter_message.command_long.command<<std::endl
                              <<"confirmation:"<<(float)current_messages.command_long.confirmation<<std::endl
-                             <<"param1:"<<current_messages.command_long.param1<<std::endl
-                             <<"param2:"<<current_messages.command_long.param2<<std::endl
-                             <<"param3:"<<current_messages.command_long.param3<<std::endl
-                             <<"param4:"<<current_messages.command_long.param4<<std::endl
-                             <<"param5:"<<current_messages.command_long.param5<<std::endl
-                             <<"param6:"<<current_messages.command_long.param6<<std::endl
-                             <<"param7:"<<current_messages.command_long.param7<<std::endl;
+                             <<"param1:"<<Inter_message.command_long.param1<<std::endl
+                             <<"param2:"<<Inter_message.command_long.param2<<std::endl
+                             <<"param3:"<<Inter_message.command_long.param3<<std::endl
+                             <<"param4:"<<Inter_message.command_long.param4<<std::endl
+                             <<"param5:"<<Inter_message.command_long.param5<<std::endl
+                             <<"param6:"<<Inter_message.command_long.param6<<std::endl
+                             <<"param7:"<<Inter_message.command_long.param7<<std::endl;
                     current_messages.time_stamps.command_long = get_time_usec();
                     this_timestamps.command_long = current_messages.time_stamps.command_long;
                     break;
