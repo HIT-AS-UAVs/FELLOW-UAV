@@ -176,6 +176,8 @@ commands(Autopilot_Interface &api)
     {
         if(api.Inter_message.command_long.command == 400)
         {
+            api.enable_offboard_control();
+            usleep(100); // give some time to let it sink in
             break;
         }
         else
@@ -183,8 +185,7 @@ commands(Autopilot_Interface &api)
             usleep(200000);
         }
     }
-    api.enable_offboard_control();
-    usleep(100); // give some time to let it sink in
+
     // --------------------------------------------------------------------------
     //   SEND OFFBOARD COMMANDS
     // --------------------------------------------------------------------------
@@ -298,12 +299,10 @@ commands(Autopilot_Interface &api)
     //
     // STOP OFFBOARD MODE
     // --------------------------------------------------------------------------
-//    sleep(5);
     api.Set_Mode(05);
     usleep(100);
     api.Set_Mode(04);
     usleep(100);
-//    float galt = 25;
     float gyaw = D2R(global_pos.hdg);
     gsp.yaw = gyaw;
     gsp.time_boot_ms = (uint32_t) (get_time_usec() / 1000);
@@ -315,9 +314,9 @@ commands(Autopilot_Interface &api)
                         High,
                         gsp);
     api.update_global_setpoint(gsp);
-    while(((float)api.current_messages.global_position_int.relative_alt/1000) >= 25)
+    while(((float)api.current_messages.global_position_int.relative_alt/1000) <= 25)
     {
-        ;
+        usleep(200000);
     }
     //返航
     mavlink_command_long_t com3 = { 0 };
