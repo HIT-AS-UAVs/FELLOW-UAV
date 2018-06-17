@@ -341,7 +341,6 @@ Servo_Control(float ServoId, float PWM_Value)
     // Send the message
     int ServoLen = serial_port->write_message(RCC);
     usleep(100);
-    printf("drop succeed!/n");
     return ServoLen;
 }
 
@@ -550,8 +549,7 @@ read_messages()
 					this_timestamps.param_value = current_messages.time_stamps.param_value;
 					std::cout<<"param_id:"<<current_messages.param_value.param_id<<std::endl
 							 <<"param_value:"<<current_messages.param_value.param_value<<std::endl
-							 <<"param_type:"<<(float)current_messages.param_value.param_type<<std::endl
-							 <<"param_index:"<<current_messages.param_value.param_index<<std::endl;
+							 <<"param_type:"<<(float)current_messages.param_value.param_type<<std::endl;
 					break;
 				}
 				case MAVLINK_MSG_ID_STATUSTEXT:
@@ -657,6 +655,7 @@ WL_read_messages()
         {
             Inter_message.sysid  = message.sysid;
             Inter_message.compid = message.compid;
+			printf("uart2 is succeed!\n");
             switch (message.msgid)
             {
                 case MAVLINK_MSG_ID_HEARTBEAT:
@@ -677,6 +676,23 @@ WL_read_messages()
                     break;
                 }
 
+                case MAVLINK_MSG_ID_COMMAND_LONG:
+                {
+                    printf("MAVLINK_MSG_ID_COMMAND_LONG\n");
+                    mavlink_msg_command_long_decode(&message, &(Inter_message.command_long));
+                    std::cout<<"command:"<<Inter_message.command_long.command<<std::endl
+                             <<"confirmation:"<<(float)current_messages.command_long.confirmation<<std::endl
+                             <<"param1:"<<Inter_message.command_long.param1<<std::endl
+                             <<"param2:"<<Inter_message.command_long.param2<<std::endl
+                             <<"param3:"<<Inter_message.command_long.param3<<std::endl
+                             <<"param4:"<<Inter_message.command_long.param4<<std::endl
+                             <<"param5:"<<Inter_message.command_long.param5<<std::endl
+                             <<"param6:"<<Inter_message.command_long.param6<<std::endl
+                             <<"param7:"<<Inter_message.command_long.param7<<std::endl;
+                    current_messages.time_stamps.command_long = get_time_usec();
+                    this_timestamps.command_long = current_messages.time_stamps.command_long;
+                    break;
+                }
                 case MAVLINK_MSG_ID_GLOBAL_POSITION_INT:
                 {
 //                    printf("MAVLINK_MSG_ID_GLOBAL_POSITION_INT\n");
@@ -685,6 +701,7 @@ WL_read_messages()
                     Inter_message.time_stamps.global_position_int = get_time_usec();
                     this_timestamps.global_position_int = Inter_message.time_stamps.global_position_int;
 //                    global_position = Inter_message.global_position_int;
+                    getposition = 1;
                     break;
                 }
 
@@ -760,18 +777,14 @@ Autopilot_Interface::
 Send_WL_Global_Position(int Target_machine, mavlink_global_position_int_t Target_Global_Position)
 {
     mavlink_message_t Global_messgge;
-	int Glolen = 0;
     mavlink_msg_global_position_int_encode(Target_machine,Target_machine,&Global_messgge,&Target_Global_Position);
-//    int Glolen = WL_write_message(Global_messgge);
-	for (int i = 0; i < 10; ++i) {
-		Glolen = WL_write_message(Global_messgge);
-		while(Glolen <= 0)
-		{
-			printf("fail send wl message! try again! ");
-			Glolen = WL_write_message(Global_messgge);
-		}
-		printf("send wl message succeed!");
-	}
+    int Glolen = WL_write_message(Global_messgge);
+    while(Glolen <= 0)
+    {
+        printf("fail send wl message! try again! ");
+        Glolen = WL_write_message(Global_messgge);
+    }
+        printf("send wl message succeed!");
 
     return Glolen;
 }
@@ -874,10 +887,12 @@ enable_offboard_control()
 
 // ----------------------------------------------------------------------------------
 //                                     设置模式
-//      STABILIZE=0,    ACRO=1,     ALT_HOLD=2,    AUTO=3,    GUIDED=4,
-//      LOITER=5,       RTL=6,      CIRCLE=7,      LAND=9,    DRIFT=11,
-//      SPORT=13,       FLIP=14,    AUTOTUNE=15,   POSHOLD=16,BRAKE=17,
-//      HROW=18,    	AVOID_ADSB=19,  GUIDED_NOGPS=20,     SMART_RTL=21,
+//      STABILIZE=0,    ACRO=1,     ALT_HOLD=2,AUTO=3,GUIDED=4,
+//       LOITER=5,      RTL=6,          CIRCLE=7,
+//       LAND=9,    DRIFT=11,       SPORT=13,
+//       FLIP=14,   AUTOTUNE=15,    POSHOLD=16,
+//       BRAKE=17,  HROW=18,       AVOID_ADSB=19,
+//       GUIDED_NOGPS=20,            SMART_RTL=21,
 // -----------------------------------------------------------------------------------
 void
 Autopilot_Interface::
@@ -945,7 +960,6 @@ int
 Autopilot_Interface::
 toggle_offboard_control( bool flag )
 {
-
     //////////////////////自稳模式
     mavlink_set_mode_t com = { 0 };
     com.base_mode = 1;
@@ -958,7 +972,7 @@ toggle_offboard_control( bool flag )
     usleep(100);
     // Done!
 
-	Servo_Control(11,1250);
+	Servo_Control(10,1250);
 
     ///////请求数据流(关闭ALL)
     mavlink_request_data_stream_t com1 = { 0 };
@@ -988,7 +1002,7 @@ toggle_offboard_control( bool flag )
     	Rlen = serial_port->write_message(Rmassage);
         usleep(100);
     }
-    usleep(200);
+    usleep(20000);
 
     ////////////////////////////////////////解锁
     mavlink_command_long_t Armdata = { 0 };
@@ -1004,7 +1018,7 @@ toggle_offboard_control( bool flag )
 
     //设置成AUTO模式，开始mission
     Set_Mode(03);
-    usleep(1000);
+    sleep(1);
     Set_Mode(03);
 
     //////////////////////////////////开始misiion
@@ -1031,7 +1045,7 @@ toggle_offboard_control( bool flag )
 
     // Done!
 
-    return Rlen;
+    return len;
 }
 
 
@@ -1318,7 +1332,7 @@ int
 Autopilot_Interface::
 Throw(float yaw,int Tnum)
 {
-    //执行reng的过程
+    //执行仍的过程
     drop = true;
 
     //给响应时间识别小圆,需加判断是否写入目标点
@@ -1336,7 +1350,7 @@ Throw(float yaw,int Tnum)
 	}
     int local_alt = -10;
     mavlink_set_position_target_local_ned_t locsp;
-    while (drop)
+    while (true)
     {
 
     	set_position(droptarget.locx, // [m]
@@ -1353,19 +1367,17 @@ Throw(float yaw,int Tnum)
         {
             //后续加上速度
             usleep(200);
-            printf("input drop process!!!");
-            if ((locpos.z+10.5)>= 0)
+            if ((locpos.z+10.5)>0)
             {
                 // ------------------------------------------------------------------------------
                 //	驱动舵机：<PWM_Value:1100-1900> 打开：1700、关闭：1250
                 //	ServoId：AUX_OUT1-6 对应148-153/9-14
                 // ------------------------------------------------------------------------------
-//                sleep(2);
-                int lenn = Servo_Control(11, 1700);
+                sleep(1);
+                int lenn = Servo_Control(10, 1700);
                 Tnum = Tnum + 1;
                 sleep(1);
-                drop = false;
-//                break;
+                break;
             }
             else
             {

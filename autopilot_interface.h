@@ -309,6 +309,7 @@ public:
     char WL_writing;
     uint64_t WL_write_count;
 
+    bool getposition = 0;
 
     int system_id;
     int autopilot_id;
