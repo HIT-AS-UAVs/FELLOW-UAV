@@ -153,7 +153,7 @@ top (int argc, char **argv)
     WL_serial_port.start();
     autopilot_interface.start();
 //视觉定位线程
-//    thread t1(videothread, ref(autopilot_interface));//ref可以使autopilot_interface引用被正确传递给videothread.
+    thread t1(videothread, ref(autopilot_interface));//ref可以使autopilot_interface引用被正确传递给videothread.
     // --------------------------------------------------------------------------
     //   RUN COMMANDS
     // --------------------------------------------------------------------------
@@ -162,9 +162,8 @@ top (int argc, char **argv)
      * Now we can implement the algorithm we want on top of the autopilot interface
      */
 
-    commands(autopilot_interface);
 
-//   commands(autopilot_interface);
+   commands(autopilot_interface);
     while(1){
                sleep(1);
     }
@@ -175,7 +174,7 @@ top (int argc, char **argv)
 
     autopilot_interface.stop();
     serial_port.stop();
-//    t1.join();
+    t1.join();
 
     // --------------------------------------------------------------------------
     //   DONE
