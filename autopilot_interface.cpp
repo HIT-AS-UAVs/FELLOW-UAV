@@ -54,7 +54,7 @@
 
 #include "autopilot_interface.h"
 
-bool stable = false, updateellipse = false, getlocalposition = true, drop = false;
+bool stable = false, updateellipse = false, getlocalposition = false, drop = false;
 int TargetNum = 0;
 coordinate droptarget;
 // ----------------------------------------------------------------------------------
@@ -1742,7 +1742,7 @@ void resultTF(Autopilot_Interface& api, vector<target>& ellipse_in, vector<targe
 
 void getdroptarget(Autopilot_Interface& api, coordinate& droptarget, vector<coordinate>& ellipse_out) {
     if (ellipse_out.size() != 0){
-    	float dis = 4;
+    	float dis = 7;
         sort(ellipse_out.begin(),ellipse_out.end());
         float e_x, e_y, locx, locy;
         realtarget(api, ellipse_out[0], e_x, e_y);

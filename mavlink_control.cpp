@@ -152,8 +152,6 @@ top (int argc, char **argv)
     serial_port.start();
     WL_serial_port.start();
     autopilot_interface.start();
-//视觉定位线程
-//    thread t1(videothread, ref(autopilot_interface));//ref可以使autopilot_interface引用被正确传递给videothread.
     // --------------------------------------------------------------------------
     //   RUN COMMANDS
     // --------------------------------------------------------------------------
@@ -174,7 +172,6 @@ top (int argc, char **argv)
 
     autopilot_interface.stop();
     serial_port.stop();
-//    t1.join();
 
     // --------------------------------------------------------------------------
     //   DONE
