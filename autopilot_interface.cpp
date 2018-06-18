@@ -647,7 +647,7 @@ WL_read_messages()
     {
         mavlink_message_t message;
         success = WL_port->read_message(message);
-        if ((message.sysid != 0)&&(message.sysid != Machine_Num))
+        if ((message.sysid != 40)&&(message.sysid != Machine_Num))
         {
             break;
         }
@@ -691,6 +691,14 @@ WL_read_messages()
                              <<"param7:"<<Inter_message.command_long.param7<<std::endl;
                     current_messages.time_stamps.command_long = get_time_usec();
                     this_timestamps.command_long = current_messages.time_stamps.command_long;
+					if((Inter_message.command_long.command==400)&&(Inter_message.command_long.param1 == 0))
+					{
+						mavlink_message_t disarm;
+						Inter_message.command_long.target_system = 1;
+						Inter_message.command_long.target_component = 1;
+						mavlink_msg_command_long_encode(255, 190, &disarm, &Inter_message.command_long);
+						int disarmlen = write_message(disarm);
+					}
                     break;
                 }
                 case MAVLINK_MSG_ID_GLOBAL_POSITION_INT:
@@ -1332,11 +1340,33 @@ int
 Autopilot_Interface::
 Throw(float yaw,int Tnum)
 {
-    //执行仍的过程
+	int local_alt = -10;
+	mavlink_set_position_target_local_ned_t locsp;
+	set_position(  target_ellipse_position[TargetNum].x, // [m]
+				   target_ellipse_position[TargetNum].y, // [m]
+				   local_alt, // [m]
+				   locsp);
+	set_yaw(yaw,locsp);
+	update_local_setpoint(locsp);
+
+	while(((current_messages.local_position_ned.z+11) <= 0)||(XYDistance(current_messages.local_position_ned.x,current_messages.local_position_ned.y,locsp.x,locsp.y) >= 8))
+	{
+		set_position(  target_ellipse_position[TargetNum].x, // [m]
+					   target_ellipse_position[TargetNum].y, // [m]
+					   local_alt, // [m]
+					   locsp);
+		set_yaw(yaw,locsp);
+		update_local_setpoint(locsp);
+		usleep(200000);
+	}
+
+
+
+	//执行仍的过程
     drop = true;
 
     //给响应时间识别小圆,需加判断是否写入目标点
-    while(drop)
+	while(drop)
 	{
 		float loc = droptarget.locx+droptarget.locy;
 		if(loc!=0)
@@ -1348,47 +1378,52 @@ Throw(float yaw,int Tnum)
 			usleep(20000);
 		}
 	}
-    int local_alt = -10;
-    mavlink_set_position_target_local_ned_t locsp;
-    while (true)
-    {
+	int i = 0;
 
-    	set_position(droptarget.locx, // [m]
-                     droptarget.locy, // [m]
-                     local_alt, // [m]
-                     locsp);
-        set_yaw(yaw, // [rad]
-                locsp);
-        // SEND THE COMMAND
-        update_local_setpoint(locsp);
-        mavlink_local_position_ned_t locpos = current_messages.local_position_ned;
-        float MXY = XYDistance(locpos.x, locpos.y, locsp.x, locsp.y);
-        if (MXY < 2)
-        {
-            //后续加上速度
-            usleep(200);
-            if ((locpos.z+10.5)>0)
-            {
-                // ------------------------------------------------------------------------------
-                //	驱动舵机：<PWM_Value:1100-1900> 打开：1700、关闭：1250
-                //	ServoId：AUX_OUT1-6 对应148-153/9-14
-                // ------------------------------------------------------------------------------
-                sleep(1);
-                int lenn = Servo_Control(10, 1700);
-                Tnum = Tnum + 1;
-                sleep(1);
-                break;
-            }
-            else
-            {
-                ;
-            }
+	while (drop)
+	{
+		float locx = droptarget.locx;
+		float locy = droptarget.locy;
+		mavlink_local_position_ned_t pos = current_messages.local_position_ned;
+		float disx = locx - pos.x;
+		float disy = locy - pos.y;
+		float adisx = fabsf(disx);
+		float adisy	= fabsf(disy);
+		if(adisx >= adisy)
+		{
+			set_velocity(disx/adisx,disy/adisx,0,locsp);
+		}
+		else
+		{
+			set_velocity(disx/adisy,disy/adisy,0,locsp);
+		}
+		set_yaw(yaw, // [rad]
+				locsp);
+		// SEND THE COMMAND
+		update_local_setpoint(locsp);
+		mavlink_local_position_ned_t locpos = current_messages.local_position_ned;
 
-        }
-        else
-        {
-            usleep(200000);
-        }
+		if ((fabsf(locpos.x-droptarget.locx) < 0.5)&&(fabsf(locpos.y-droptarget.locy) < 0.5)&&((locpos.z+10.5)>= 0))
+		{
+			Set_Mode(05);
+			sleep(2);
+			Set_Mode(04);
+			printf("input drop process!!!\n");
+			// ------------------------------------------------------------------------------
+			//	驱动舵机：<PWM_Value:1100-1900> 打开：1700、关闭：1250
+			//	ServoId：AUX_OUT1-6 对应148-153/9-14
+			// ------------------------------------------------------------------------------
+			usleep(100000);
+			int lenn = Servo_Control(11, 1700);
+			Tnum = Tnum + 1;
+			sleep(1);
+			drop = false;
+			break;
+		}
+		else
+		{
+			usleep(200000);
+		}
     }
     return Tnum;
 }

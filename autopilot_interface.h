@@ -122,7 +122,7 @@ extern vector<target> target_ellipse_position, ellipse_T, ellipse_F;
 #define MAVLINK_MSG_ID_SET_POSITION_TARGET_GLOBAL_INT_FORCE        0b0000111000111111
 #define MAVLINK_MSG_ID_SET_POSITION_TARGET_GLOBAL_INT_YAW_ANGLE    0b0000100111111111
 #define MAVLINK_MSG_ID_SET_POSITION_TARGET_GLOBAL_INT_YAW_RATE     0b0000010111111111
-#define Machine_Num 1
+#define Machine_Num 42
 
 
 // ------------------------------------------------------------------------------
