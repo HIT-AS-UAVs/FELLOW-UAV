@@ -699,6 +699,21 @@ WL_read_messages()
 						mavlink_msg_command_long_encode(255, 190, &disarm, &Inter_message.command_long);
 						int disarmlen = write_message(disarm);
 					}
+                    if((Inter_message.command_long.command == 20))
+                    {
+                        mavlink_message_t RTLL;
+                        Inter_message.command_long.target_system = 01;
+                        Inter_message.command_long.target_component = 01;
+                        Inter_message.command_long.command = 20;
+                        mavlink_msg_command_long_encode(255,190,&RTLL,&Inter_message.command_long);
+                        for (int i = 0; i <6 ; ++i)
+                        {
+                            int RT = write_message(RTLL);
+                            usleep(20000);
+                        }
+
+                    }
+
                     break;
                 }
                 case MAVLINK_MSG_ID_GLOBAL_POSITION_INT:
@@ -1340,32 +1355,49 @@ int
 Autopilot_Interface::
 Throw(float yaw,int Tnum)
 {
-	int local_alt = -10;
+	int local_alt = -8;
 	mavlink_set_position_target_local_ned_t locsp;
-	set_position(  target_ellipse_position[TargetNum].x, // [m]
-				   target_ellipse_position[TargetNum].y, // [m]
-				   local_alt, // [m]
-				   locsp);
-	set_yaw(yaw,locsp);
+	set_velocity(0, 0, 1, locsp);
+	set_yaw(yaw, locsp);
 	update_local_setpoint(locsp);
-
-	while(((current_messages.local_position_ned.z+11) <= 0)||(XYDistance(current_messages.local_position_ned.x,current_messages.local_position_ned.y,locsp.x,locsp.y) >= 8))
+	while(1)
 	{
-		set_position(  target_ellipse_position[TargetNum].x, // [m]
-					   target_ellipse_position[TargetNum].y, // [m]
-					   local_alt, // [m]
-					   locsp);
+		if((current_messages.local_position_ned.z+0.5-local_alt)>=0)
+		{
+			set_velocity(0, 0, 0, locsp);
+			set_yaw(yaw, locsp);
+			update_local_setpoint(locsp);
+			break;
+		}
+		else
+		{
+			usleep(2000);
+		}
+	}
+
+	while(((current_messages.local_position_ned.z+9) <= 0)||(XYDistance(current_messages.local_position_ned.x,current_messages.local_position_ned.y,target_ellipse_position[TargetNum].x,target_ellipse_position[TargetNum].y) >= 4))
+	{
+		float Disx = target_ellipse_position[TargetNum].x - current_messages.local_position_ned.x;
+		float Disy = target_ellipse_position[TargetNum].y - current_messages.local_position_ned.y;
+		float Adisx = fabsf(Disx);
+		float Adisy	= fabsf(Disy);
+
+		if(Adisx >= Adisy)
+		{
+			set_velocity(0.5*(Disx/Adisx),0.5*(Disy/Adisx),0,locsp);
+		}
+		else
+		{
+			set_velocity(0.5*(Disx/Adisy),0.5*(Disy/Adisy),0,locsp);
+		}
+		// SEND THE COMMAND
 		set_yaw(yaw,locsp);
 		update_local_setpoint(locsp);
 		usleep(200000);
 	}
-
-
-
-	//执行仍的过程
-    drop = true;
-
-    //给响应时间识别小圆,需加判断是否写入目标点
+	//执行reng的过程
+	drop = true;
+	//给响应时间识别小圆,需加判断是否写入目标点
 	while(drop)
 	{
 		float loc = droptarget.locx+droptarget.locy;
@@ -1378,7 +1410,8 @@ Throw(float yaw,int Tnum)
 			usleep(20000);
 		}
 	}
-	int i = 0;
+
+//    int i = 0;
 
 	while (drop)
 	{
@@ -1389,13 +1422,17 @@ Throw(float yaw,int Tnum)
 		float disy = locy - pos.y;
 		float adisx = fabsf(disx);
 		float adisy	= fabsf(disy);
+//    	locx = 2*locx-pos.x;
+//    	locy = 2*locy - pos.y;
+//    	locsp.x = locx;
+//    	locsp.y = locy;
 		if(adisx >= adisy)
 		{
-			set_velocity(disx/adisx,disy/adisx,0,locsp);
+			set_velocity(0.5*(disx/adisx),0.5*(disy/adisx),0,locsp);
 		}
 		else
 		{
-			set_velocity(disx/adisy,disy/adisy,0,locsp);
+			set_velocity(0.5*(disx/adisy),0.5*(disy/adisy),0,locsp);
 		}
 		set_yaw(yaw, // [rad]
 				locsp);
@@ -1403,17 +1440,17 @@ Throw(float yaw,int Tnum)
 		update_local_setpoint(locsp);
 		mavlink_local_position_ned_t locpos = current_messages.local_position_ned;
 
-		if ((fabsf(locpos.x-droptarget.locx) < 0.5)&&(fabsf(locpos.y-droptarget.locy) < 0.5)&&((locpos.z+10.5)>= 0))
+		if ((fabsf(locpos.x-droptarget.locx) < 0.2)&&(fabsf(locpos.y-droptarget.locy) < 0.2)&&((locpos.z+9)>= 0))
 		{
 			Set_Mode(05);
-			sleep(2);
+			sleep(1);
 			Set_Mode(04);
 			printf("input drop process!!!\n");
 			// ------------------------------------------------------------------------------
 			//	驱动舵机：<PWM_Value:1100-1900> 打开：1700、关闭：1250
 			//	ServoId：AUX_OUT1-6 对应148-153/9-14
 			// ------------------------------------------------------------------------------
-			usleep(100000);
+			sleep(2);
 			int lenn = Servo_Control(11, 1700);
 			Tnum = Tnum + 1;
 			sleep(1);
@@ -1424,9 +1461,10 @@ Throw(float yaw,int Tnum)
 		{
 			usleep(200000);
 		}
-    }
-    return Tnum;
+	}
+	return Tnum;
 }
+
 
 int
 Autopilot_Interface::ThrowF(float yaw,int32_t lat,int32_t lon,int Num)
