@@ -635,7 +635,6 @@ write_message(mavlink_message_t message)
     return len;
 }
 
-
 void
 Autopilot_Interface::
 WL_read_messages()
@@ -655,7 +654,6 @@ WL_read_messages()
         {
             Inter_message.sysid  = message.sysid;
             Inter_message.compid = message.compid;
-			printf("uart2 is succeed!\n");
             switch (message.msgid)
             {
                 case MAVLINK_MSG_ID_HEARTBEAT:
@@ -676,31 +674,6 @@ WL_read_messages()
                     break;
                 }
 
-                case MAVLINK_MSG_ID_COMMAND_LONG:
-                {
-                    printf("MAVLINK_MSG_ID_COMMAND_LONG\n");
-                    mavlink_msg_command_long_decode(&message, &(Inter_message.command_long));
-                    std::cout<<"command:"<<Inter_message.command_long.command<<std::endl
-                             <<"confirmation:"<<(float)current_messages.command_long.confirmation<<std::endl
-                             <<"param1:"<<Inter_message.command_long.param1<<std::endl
-                             <<"param2:"<<Inter_message.command_long.param2<<std::endl
-                             <<"param3:"<<Inter_message.command_long.param3<<std::endl
-                             <<"param4:"<<Inter_message.command_long.param4<<std::endl
-                             <<"param5:"<<Inter_message.command_long.param5<<std::endl
-                             <<"param6:"<<Inter_message.command_long.param6<<std::endl
-                             <<"param7:"<<Inter_message.command_long.param7<<std::endl;
-                    current_messages.time_stamps.command_long = get_time_usec();
-                    this_timestamps.command_long = current_messages.time_stamps.command_long;
-					if((Inter_message.command_long.command==400)&&(Inter_message.command_long.param1 == 0))
-					{
-						mavlink_message_t disarm;
-						Inter_message.command_long.target_system = 1;
-						Inter_message.command_long.target_component = 1;
-						mavlink_msg_command_long_encode(255, 190, &disarm, &Inter_message.command_long);
-						int disarmlen = write_message(disarm);
-					}
-                    break;
-                }
                 case MAVLINK_MSG_ID_GLOBAL_POSITION_INT:
                 {
 //                    printf("MAVLINK_MSG_ID_GLOBAL_POSITION_INT\n");
@@ -709,7 +682,6 @@ WL_read_messages()
                     Inter_message.time_stamps.global_position_int = get_time_usec();
                     this_timestamps.global_position_int = Inter_message.time_stamps.global_position_int;
 //                    global_position = Inter_message.global_position_int;
-                    getposition = 1;
                     break;
                 }
 
@@ -737,6 +709,39 @@ WL_read_messages()
                     std::cout<<"mission_ack:"<<(float)Inter_message.mission_ack.type<<std::endl;
                     break;
                 }
+                case MAVLINK_MSG_ID_COMMAND_LONG:
+                {
+                    printf("MAVLINK_MSG_ID_COMMAND_LONG\n");
+                    mavlink_msg_command_long_decode(&message, &(Inter_message.command_long));
+                    std::cout<<"command:"<<Inter_message.command_long.command<<std::endl
+                             <<"confirmation:"<<(float)Inter_message.command_long.confirmation<<std::endl
+                             <<"param1:"<<Inter_message.command_long.param1<<std::endl
+                             <<"param2:"<<Inter_message.command_long.param2<<std::endl
+                             <<"param3:"<<Inter_message.command_long.param3<<std::endl
+                             <<"param4:"<<Inter_message.command_long.param4<<std::endl
+                             <<"param5:"<<Inter_message.command_long.param5<<std::endl
+                             <<"param6:"<<Inter_message.command_long.param6<<std::endl
+                             <<"param7:"<<Inter_message.command_long.param7<<std::endl;
+                    Inter_message.time_stamps.command_long = get_time_usec();
+                    this_timestamps.command_long = Inter_message.time_stamps.command_long;
+                    if((Inter_message.command_long.command==400)&&(Inter_message.command_long.param1 == 0))
+                    {
+                        mavlink_message_t disarm;
+                        Inter_message.command_long.target_system = 1;
+                        Inter_message.command_long.target_component = 1;
+                        mavlink_msg_command_long_encode(255, 190, &disarm, &Inter_message.command_long);
+                        int disarmlen = write_message(disarm);
+                    }
+                    if((Inter_message.command_long.command == 20))
+                    {
+                        mavlink_message_t RTLL;
+                        Inter_message.command_long.target_system = 01;
+                        Inter_message.command_long.target_component = 01;
+                        mavlink_msg_command_long_encode(255,190,&RTLL,&Inter_message.command_long);
+                        int RT = write_message(RTLL);
+                    }
+                    break;
+                }
 
                 default:
                 {
@@ -746,18 +751,18 @@ WL_read_messages()
 
             }
         }
-		received_all =
-				this_timestamps.heartbeat                  &&
-				//				this_timestamps.battery_status             &&
-				//				this_timestamps.radio_status               &&
-				//				this_timestamps.local_position_ned         &&
-				//				this_timestamps.global_position_int        &&
-				//				this_timestamps.position_target_local_ned  &&
-				//				this_timestamps.position_target_global_int &&
-				//				this_timestamps.highres_imu                &&
-				//				this_timestamps.attitude                   &&
-				this_timestamps.sys_status
-				;
+        received_all =
+                this_timestamps.heartbeat                  &&
+                //				this_timestamps.battery_status             &&
+                //				this_timestamps.radio_status               &&
+                //				this_timestamps.local_position_ned         &&
+                //				this_timestamps.global_position_int        &&
+                //				this_timestamps.position_target_local_ned  &&
+                //				this_timestamps.position_target_global_int &&
+                //				this_timestamps.highres_imu                &&
+                //				this_timestamps.attitude                   &&
+                this_timestamps.sys_status
+                ;
         if ( WL_writing != false )
         {
             usleep(100); // look for components of batches at 5kHz
@@ -1783,8 +1788,6 @@ void getdroptarget(Autopilot_Interface& api, coordinate& droptarget, vector<coor
         realtarget(api, ellipse_out[0], e_x, e_y);
         locx = api.current_messages.local_position_ned.x;
         locy = api.current_messages.local_position_ned.y;
-//		locx = 0;
-//		locy = 0;
         if(abs(e_x - locx) < dis && abs(e_y - locy) < dis){
         	droptarget.locx = e_x;
         	droptarget.locy = e_y;
@@ -1931,10 +1934,8 @@ void filtellipse(Autopilot_Interface& api, vector<Ellipse>& ellipseok, vector<El
 }
 
 void nearellipse(Autopilot_Interface& api, vector<target>& target_ellipse){
-//    float locx = api.current_messages.local_position_ned.x;
-//    float locy = api.current_messages.local_position_ned.y;
-    float locx = 0;
-    float locy = 0;
+    float locx = api.current_messages.local_position_ned.x;
+    float locy = api.current_messages.local_position_ned.y;
     int size = target_ellipse.size();
 	if(size == 0 || size == 1){
 

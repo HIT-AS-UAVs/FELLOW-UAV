@@ -503,7 +503,6 @@ VideoWriter writer1("小图.avi", CV_FOURCC('M', 'J', 'P', 'G'), 5.0, Size(640, 
             if(stable) {
                 resultTF(api, target_ellipse_position, ellipse_T, ellipse_F);
             }
-
         } else {
             getdroptarget(api, droptarget, ellipse_out);
         }
