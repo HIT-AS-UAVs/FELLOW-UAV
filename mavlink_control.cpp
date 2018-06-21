@@ -47,9 +47,9 @@ top (int argc, char **argv)
     char *uart_name = (char*)"/dev/tty.usbmodem1";
 #else
     char *uart_name = (char*)"/dev/ttyTHS2";
-    char *WL_uart = (char*)"/dev/ttyS0";
+//    char *WL_uart = (char*)"/dev/ttyS0";
 //    char *uart_name = (char*)"/dev/ttyUSB0";
-//    char *WL_uart = (char*)"/dev/ttyUSB1";
+    char *WL_uart = (char*)"/dev/ttyUSB0";
 #endif
     int baudrate = 57600;
 
@@ -304,14 +304,14 @@ commands(Autopilot_Interface &api)
     gsp.yaw = gyaw;
     gsp.time_boot_ms = (uint32_t) (get_time_usec() / 1000);
     gsp.coordinate_frame = MAV_FRAME_GLOBAL_RELATIVE_ALT_INT;
-    float High = 25;
+    float High = 30;
     //set global_point 经度，纬度，相对home高度
     set_global_position(global_pos.lat,
                         global_pos.lon,
                         High,
                         gsp);
     api.update_global_setpoint(gsp);
-    while(((float)api.current_messages.global_position_int.relative_alt/1000) <= 25)
+    while(((float)api.current_messages.global_position_int.relative_alt/1000) <= 29)
     {
         usleep(200000);
     }
