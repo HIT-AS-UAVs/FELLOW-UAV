@@ -352,8 +352,8 @@ public:
     void handle_quit( int sig );
 
     int Throw(float yaw,int TNum);
-    int ThrowF(float yaw,int32_t lat,int32_t lon, int Num);
-
+//    int ThrowF(float yaw,int32_t lat,int32_t lon, int Num);
+    int ThrowF(float yaw,target* targetF);
 
 private:
 

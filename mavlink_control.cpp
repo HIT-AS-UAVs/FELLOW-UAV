@@ -126,9 +126,9 @@ top (int argc, char **argv)
 
 
    commands(autopilot_interface);
-    while(1){
-               sleep(1);
-    }
+//    while(1){
+//               sleep(1);
+//    }
     // --------------------------------------------------------------------------
     //   THREAD and PORT SHUTDOWN
     // --------------------------------------------------------------------------
@@ -136,6 +136,7 @@ top (int argc, char **argv)
 
     autopilot_interface.stop();
     serial_port.stop();
+    WL_serial_port.stop();
 
     // --------------------------------------------------------------------------
     //   DONE
@@ -183,6 +184,7 @@ commands(Autopilot_Interface &api)
         }
     }
 
+
     // --------------------------------------------------------------------------
     //   SEND OFFBOARD COMMANDS
     // --------------------------------------------------------------------------
@@ -220,7 +222,7 @@ commands(Autopilot_Interface &api)
             {
                 mavlink_global_position_int_t current_global = api.global_position;
                 float distan = Distance(current_global.lat,current_global.lon,current_global.relative_alt,gp.lat,gp.lon,gp.relative_alt);
-                if(distan < 5)
+                if(distan < 8)
                 {
                     usleep(200);
                     sleep(2);
@@ -230,6 +232,7 @@ commands(Autopilot_Interface &api)
                 }
                 else
                 {
+                    api.update_global_setpoint(gsp);
                     usleep(200000);
                 }
             }
@@ -240,9 +243,20 @@ commands(Autopilot_Interface &api)
         }
         while(detect)
         {
-
+            mavlink_set_position_target_local_ned_t locsp;
+            set_velocity(0, 0, 0.8, locsp);
+            set_yaw(yaw, locsp);
+            locsp.z = -20;
+            api.update_local_setpoint(locsp);
+            while((api.current_messages.local_position_ned.z + 20.5) <=0)
+            {
+                api.update_local_setpoint(locsp);
+                usleep(200000);
+            }
+            set_velocity(0, 0, 0, locsp);
+            api.update_local_setpoint(locsp);
             thread t1(videothread, ref(api));//ref可以使autopilot_interface引用被正确传递给videothread.
-            sleep(5);//设置一定时间启动视觉线程,并识别圆
+            sleep(8);//设置一定时间启动视觉线程,并识别圆
             //停止添加圆,然后开始识别字符
             updateellipse = true;
 
@@ -250,6 +264,34 @@ commands(Autopilot_Interface &api)
             {
                 int TF=0;
                 stable = true;
+                mavlink_set_position_target_local_ned_t sp;
+                float Disx = target_ellipse_position[TargetNum].x - api.current_messages.local_position_ned.x;
+                float Disy = target_ellipse_position[TargetNum].y - api.current_messages.local_position_ned.y;
+                float Adisx = fabsf(Disx);
+                float Adisy = fabsf(Disy);
+
+                while((Adisx >= 2)||(Adisy >= 2))
+                {
+
+                    if (Adisx >= Adisy)
+                    {
+                        set_velocity(0.5*(Disx / Adisx),0.5*( Disy / Adisx), 0, sp);
+                    }
+                    else
+                    {
+                        set_velocity(0.5*(Disx / Adisy), 0.5*(Disy / Adisy), 0, sp);
+                    }
+                    set_yaw(yaw, // [rad]
+                            sp);
+                    api.update_local_setpoint(sp);
+                    usleep(200000);
+                    Disx = target_ellipse_position[TargetNum].x - api.current_messages.local_position_ned.x;
+                    Disy = target_ellipse_position[TargetNum].y - api.current_messages.local_position_ned.y;
+                    Adisx = fabsf(Disx);
+                    Adisy = fabsf(Disy);
+
+                }
+
                 while (stable)
                 {
                     sleep(1);
@@ -275,7 +317,7 @@ commands(Autopilot_Interface &api)
                 {
 
                     TNum = api.Throw(yaw,TNum);
-                    TargetNum = TargetNum + 1;
+                    TargetNum = target_ellipse_position.size();
                     detect= false;
                     flag = false;
                     break;
@@ -288,33 +330,23 @@ commands(Autopilot_Interface &api)
             t1.join();
         }
     }
-    global_pos = api.current_messages.global_position_int;
 
-
-    // --------------------------------------------------------------------------
-    // RETURN Home 以及
-    //
-    // STOP OFFBOARD MODE
-    // --------------------------------------------------------------------------
     api.Set_Mode(05);
-    usleep(100);
+    usleep(200);
     api.Set_Mode(04);
-    usleep(100);
-    float gyaw = D2R(global_pos.hdg);
-    gsp.yaw = gyaw;
-    gsp.time_boot_ms = (uint32_t) (get_time_usec() / 1000);
-    gsp.coordinate_frame = MAV_FRAME_GLOBAL_RELATIVE_ALT_INT;
-    float High = 30;
-    //set global_point 经度，纬度，相对home高度
-    set_global_position(global_pos.lat,
-                        global_pos.lon,
-                        High,
-                        gsp);
-    api.update_global_setpoint(gsp);
-    while(((float)api.current_messages.global_position_int.relative_alt/1000) <= 29)
+    usleep(200);
+    //返航高度
+    float High = 20;
+    mavlink_set_position_target_local_ned_t locsp;
+    set_velocity(0, 0, -1, locsp);
+    api.update_local_setpoint(locsp);
+    while((api.current_messages.local_position_ned.z + High) >=0)
     {
+        api.update_local_setpoint(locsp);
         usleep(200000);
     }
+    set_velocity(0, 0, 0, locsp);
+    api.update_local_setpoint(locsp);
     //返航
     mavlink_command_long_t com3 = { 0 };
     com3.target_system= 01;
@@ -323,7 +355,12 @@ commands(Autopilot_Interface &api)
 
     mavlink_message_t message3;
     mavlink_msg_command_long_encode(255, 190, &message3, &com3);
+
     int len3 = api.write_message(message3);
+    while (len3 <= 0)
+    {
+        len3 = api.write_message(message3);
+    }
 
 
     // now pixhawk isn't listening to setpoint commands

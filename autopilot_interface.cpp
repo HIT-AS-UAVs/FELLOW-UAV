@@ -138,7 +138,6 @@ set_position(float x, float y, float z, mavlink_set_position_target_local_ned_t 
 	sp.y   = y;
 	sp.z   = z;
 	printf("POSITION SETPOINT XYZ = [ %.4f , %.4f , %.4f ] \n", sp.x, sp.y, sp.z);
-
 }
 
 /*
@@ -179,22 +178,6 @@ set_yaw(float yaw, mavlink_set_position_target_local_ned_t &sp)
 	printf("POSITION SETPOINT YAW = %.4f \n", sp.yaw);
 
 }
-
-/*
- * Set target local ned yaw rate
- *
- * Modifies a mavlink_set_position_target_local_ned_t struct with a target yaw rate
- * in the Local NED frame, in radians per second.
- */
-void
-set_yaw_rate(float yaw_rate, mavlink_set_position_target_local_ned_t &sp)
-{
-	sp.type_mask &=
-		MAVLINK_MSG_SET_POSITION_TARGET_LOCAL_NED_YAW_RATE ;
-
-	sp.yaw_rate  = yaw_rate;
-}
-
 
 /*
  * 设置全局目标坐标点，坐标系GLOBAL_RELATIVE_ALT_INT
@@ -243,20 +226,6 @@ set_global_yaw(float yaw, mavlink_set_position_target_global_int_t &sp)
 	printf("POSITION SETPOINT YAW = %.4f \n", sp.yaw);
 }
 
-/*
- * Set target local ned yaw rate
- *
- * Modifies a mavlink_set_position_target_local_ned_t struct with a target yaw rate
- * in the Local NED frame, in radians per second.
- */
-void
-set_global_yaw_rate(float yaw_rate, mavlink_set_position_target_global_int_t &sp)
-{
-	sp.type_mask &=
-			MAVLINK_MSG_ID_SET_POSITION_TARGET_GLOBAL_INT_YAW_RATE ;
-
-	sp.yaw_rate  = yaw_rate;
-}
 
 
 // ----------------------------------------------------------------------------------
@@ -789,8 +758,13 @@ Autopilot_Interface::
 WL_write_message(mavlink_message_t message)
 {
     // do the write
-    int len = WL_port->write_message(message);
-    // book keep
+    int len;
+    for (int i = 0; i < 10; ++i)
+    {
+        len = WL_port->write_message(message);
+        usleep(50000);
+    }
+
     WL_write_count++;
     // Done!
     return len;
@@ -802,7 +776,7 @@ Send_WL_Global_Position(int Target_machine, mavlink_global_position_int_t Target
     mavlink_message_t Global_messgge;
     mavlink_msg_global_position_int_encode(Target_machine,Target_machine,&Global_messgge,&Target_Global_Position);
     int Glolen = WL_write_message(Global_messgge);
-    while(Glolen <= 0)
+    if (Glolen <= 0)
     {
         printf("fail send wl message! try again! ");
         Glolen = WL_write_message(Global_messgge);
@@ -995,7 +969,7 @@ toggle_offboard_control( bool flag )
     usleep(100);
     // Done!
 
-	Servo_Control(10,1250);
+	Servo_Control(11,1250);
 
     ///////请求数据流(关闭ALL)
     mavlink_request_data_stream_t com1 = { 0 };
@@ -1037,11 +1011,11 @@ toggle_offboard_control( bool flag )
     mavlink_msg_command_long_encode(255, 190, &Armmes, &Armdata);
     // Send the message
     int Armlen = serial_port->write_message(Armmes);
-    usleep(100);
+    sleep(3);
 
     //设置成AUTO模式，开始mission
     Set_Mode(03);
-    sleep(1);
+    usleep(1000);
     Set_Mode(03);
 
     //////////////////////////////////开始misiion
@@ -1051,7 +1025,7 @@ toggle_offboard_control( bool flag )
     mission_start.command = 300;
     mission_start.confirmation = 1;
     mission_start.param1 = 1;
-    mission_start.param2 = 8;
+    mission_start.param2 = 100;
 
     mavlink_message_t Mission_starmessage;
     mavlink_msg_command_long_encode(255, 190, &Mission_starmessage, &mission_start);
@@ -1371,12 +1345,15 @@ Throw(float yaw,int Tnum)
 		}
 		else
 		{
-			usleep(2000);
+            set_velocity(0, 0, 0.5, locsp);
+            set_yaw(yaw, locsp);
+            update_local_setpoint(locsp);
+		    usleep(2000);
 		}
 	}
 
-	while(((current_messages.local_position_ned.z+9) <= 0)||(XYDistance(current_messages.local_position_ned.x,current_messages.local_position_ned.y,target_ellipse_position[TargetNum].x,target_ellipse_position[TargetNum].y) >= 4))
-	{
+    while((fabsf(current_messages.local_position_ned.x-target_ellipse_position[TargetNum].x)>=1)||(fabsf(current_messages.local_position_ned.y-target_ellipse_position[TargetNum].y)>=1))
+    {
 		float Disx = target_ellipse_position[TargetNum].x - current_messages.local_position_ned.x;
 		float Disy = target_ellipse_position[TargetNum].y - current_messages.local_position_ned.y;
 		float Adisx = fabsf(Disx);
@@ -1411,46 +1388,44 @@ Throw(float yaw,int Tnum)
 		}
 	}
 
-//    int i = 0;
-
 	while (drop)
 	{
-		float locx = droptarget.locx;
-		float locy = droptarget.locy;
+        float locx = droptarget.x;
+        float locy = droptarget.y;
 		mavlink_local_position_ned_t pos = current_messages.local_position_ned;
-		float disx = locx - pos.x;
-		float disy = locy - pos.y;
-		float adisx = fabsf(disx);
-		float adisy	= fabsf(disy);
+//		float disx = locx - pos.x;
+//		float disy = locy - pos.y;
+        float adisx = fabsf(locx);
+        float adisy	= fabsf(locy);
 //    	locx = 2*locx-pos.x;
 //    	locy = 2*locy - pos.y;
 //    	locsp.x = locx;
 //    	locsp.y = locy;
-		if(adisx >= adisy)
-		{
-			set_velocity(0.5*(disx/adisx),0.5*(disy/adisx),0,locsp);
-		}
-		else
-		{
-			set_velocity(0.5*(disx/adisy),0.5*(disy/adisy),0,locsp);
-		}
+        if(adisx >= adisy)
+        {
+            set_velocity(0.3*(locx /adisx),0.3*(locy/adisx),0,locsp);
+        }
+        else
+        {
+            set_velocity(0.3*(locx/adisy),0.3*(locy/adisy),0,locsp);
+        }
 		set_yaw(yaw, // [rad]
 				locsp);
 		// SEND THE COMMAND
 		update_local_setpoint(locsp);
 		mavlink_local_position_ned_t locpos = current_messages.local_position_ned;
 
-		if ((fabsf(locpos.x-droptarget.locx) < 0.2)&&(fabsf(locpos.y-droptarget.locy) < 0.2)&&((locpos.z+9)>= 0))
-		{
+        if ((adisx < 10)&&(adisy < 10))
+        {
 			Set_Mode(05);
-			sleep(1);
+			usleep(10000);
 			Set_Mode(04);
 			printf("input drop process!!!\n");
 			// ------------------------------------------------------------------------------
 			//	驱动舵机：<PWM_Value:1100-1900> 打开：1700、关闭：1250
 			//	ServoId：AUX_OUT1-6 对应148-153/9-14
 			// ------------------------------------------------------------------------------
-			sleep(2);
+			sleep(1);
 			int lenn = Servo_Control(11, 1700);
 			Tnum = Tnum + 1;
 			sleep(1);
@@ -1467,63 +1442,91 @@ Throw(float yaw,int Tnum)
 
 
 int
-Autopilot_Interface::ThrowF(float yaw,int32_t lat,int32_t lon,int Num)
+Autopilot_Interface::
+ThrowF(float yaw,target* targetF)
 {
-	mavlink_set_position_target_global_int_t glosp;
-	float hight = 25;
-	Set_Mode(05);
-	usleep(400);
-	Set_Mode(04);
-	usleep(400);
-	set_global_position(lat,lon,hight,glosp);
-	set_global_yaw(yaw,glosp);
-	update_global_setpoint(glosp);
-	int Targetnum = TargetNum;
-	TargetNum = Num;
-	while(updateellipse)
-	{
-		mavlink_global_position_int_t current_global = current_messages.global_position_int;
-		float distan = Distance(current_global.lat,current_global.lon,current_global.relative_alt,lat,lon,hight);
-		if(distan < 5)
-		{
-			sleep(2);
-			//updateellipse = false;
-			break;
-		}
-		else
-		{
-			usleep(200000);
-		}
-	}
-	ellipse_F[0].T_N = ellipse_F[0].F_N = ellipse_F[0].possbile = 0;
-	ellipse_F[1].T_N = ellipse_F[1].F_N = ellipse_F[1].possbile = 0;
-	stable = true;
-	int TF = 0;
-	while(stable)
-	{
+    mavlink_set_position_target_global_int_t glosp;
+    mavlink_set_position_target_local_ned_t losp;
+    int T = 0;
+    //detect hight
+    float hight = 20;
+    Set_Mode(05);
+    usleep(400);
+    Set_Mode(04);
+    set_global_velocity(1,1,0,glosp);
+    set_velocity(1,1,0,losp);
+    update_local_setpoint(losp);
+    usleep(100);
+    update_global_setpoint(glosp);
+    usleep(400);
+    set_global_position(targetF->lat,targetF->lon,hight,glosp);
+    set_global_yaw(yaw,glosp);
+    update_global_setpoint(glosp);
+    int Targetnum = TargetNum;
+    TargetNum = targetF->num;
+    while(updateellipse)
+    {
+        mavlink_global_position_int_t current_global = current_messages.global_position_int;
+        float distan = Distance(current_global.lat,current_global.lon,current_global.relative_alt,targetF->lat,targetF->lon,hight*1000);
+        if(distan < 10)
+        {
+            sleep(1);
+            //updateellipse = false;
+            break;
+        }
+        else
+        {
+            update_global_setpoint(glosp);
+            usleep(200000);
 
-		sleep(1);
-		TF++;
-		if (TF==10)
-		{
-			int TplusF = target_ellipse_position[TargetNum].T_N + target_ellipse_position[TargetNum].F_N;
-			if(TplusF <= 10 )
-			{
-				break;
-			}
-			else {
-					continue;
-			}
-		}
-		else
-		{
-			;
-		}
+        }
+    }
+    stable = true;
+    int TF = 0;
+    while(stable)
+    {
 
-	}
-	Throw(yaw,2);
-	TargetNum = Targetnum;
+        sleep(1);
+        TF++;
+        if (TF==10)
+        {
+            int TplusF = target_ellipse_position[TargetNum].T_N + target_ellipse_position[TargetNum].F_N;
+            if(TplusF <= 5 )
+            {
+                break;
+            }
+            else
+            {
+                continue;
+            }
+        }
+        else
+        {
+            ;
+        }
 
+    }
+    if (target_ellipse_position[TargetNum].T_N >= 50)
+    {
+        T = Throw(yaw,2);
+    }
+    else
+    {
+        //RTL
+        mavlink_command_long_t com3 = { 0 };
+        com3.target_system= 01;
+        com3.target_component = 01;
+        com3.command = 20;
+
+        mavlink_message_t message3;
+        mavlink_msg_command_long_encode(255, 190, &message3, &com3);
+        for (int i = 0; i < 3; ++i)
+        {
+            int len3 = write_message(message3);
+        }
+    }
+    TargetNum = Targetnum;
+    return T;
 }
 
 // ------------------------------------------------------------------------------
