@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.10)
+cmake_minimum_required(VERSION 3.1)
 project(FELLOW_UAV)
 
 find_package(OpenCV REQUIRED)

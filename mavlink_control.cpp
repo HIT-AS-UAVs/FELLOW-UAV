@@ -127,7 +127,8 @@ top (int argc, char **argv)
 
    commands(autopilot_interface);
 //    while(1){
-//               sleep(1);
+//        printf("loops!\n");
+//        sleep(1);
 //    }
     // --------------------------------------------------------------------------
     //   THREAD and PORT SHUTDOWN
@@ -172,8 +173,9 @@ commands(Autopilot_Interface &api)
     // --------------------------------------------------------------------------
     while(flag)
     {
-        if(api.Inter_message.command_long.command == 400)
+        if((api.Inter_message.command_long.command == 400)&&(api.Inter_message.command_long.param1 = 1))
         {
+            sleep(2);
             api.enable_offboard_control();
             usleep(100); // give some time to let it sink in
             break;
@@ -196,6 +198,7 @@ commands(Autopilot_Interface &api)
         //设置触发节点
         if(api.getposition == 1)
         {
+            sleep(10);
             global_pos = api.current_messages.global_position_int;
             gp = api.Inter_message.global_position_int;
             // --------------------------------------------------------------------------
@@ -210,7 +213,7 @@ commands(Autopilot_Interface &api)
             gsp.yaw = yaw;
             gsp.time_boot_ms = (uint32_t) (get_time_usec() / 1000);
             gsp.coordinate_frame = MAV_FRAME_GLOBAL_RELATIVE_ALT_INT;
-            float High = 20;
+            float High = 35;
             //set global_point 经度，纬度，相对home高度
             set_global_position(gp.lat,
                                 gp.lon,
@@ -221,10 +224,10 @@ commands(Autopilot_Interface &api)
             while(flag)
             {
                 mavlink_global_position_int_t current_global = api.global_position;
-                float distan = Distance(current_global.lat,current_global.lon,current_global.relative_alt,gp.lat,gp.lon,gp.relative_alt);
-                if(distan < 8)
+                float distan = Distance(current_global.lat,current_global.lon,40,gp.lat,gp.lon,40);
+                if(distan < 5)
                 {
-                    usleep(200);
+//                    usleep(200);
                     sleep(2);
                     api.getposition = 0;
                     detect= true;
@@ -233,30 +236,33 @@ commands(Autopilot_Interface &api)
                 else
                 {
                     api.update_global_setpoint(gsp);
-                    usleep(200000);
+                    usleep(20000);
                 }
             }
         }
         else
         {
-            usleep(200000);
+            usleep(20000);
         }
         while(detect)
         {
             mavlink_set_position_target_local_ned_t locsp;
-            set_velocity(0, 0, 0.8, locsp);
+            set_velocity(0, 0, 1, locsp);
             set_yaw(yaw, locsp);
-            locsp.z = -20;
+            locsp.z = -28;
             api.update_local_setpoint(locsp);
-            while((api.current_messages.local_position_ned.z + 20.5) <=0)
+            while((api.current_messages.local_position_ned.z -locsp.z+0.5) <=0)
             {
                 api.update_local_setpoint(locsp);
-                usleep(200000);
+                usleep(100000);
             }
             set_velocity(0, 0, 0, locsp);
             api.update_local_setpoint(locsp);
+            usleep(100);
+
             thread t1(videothread, ref(api));//ref可以使autopilot_interface引用被正确传递给videothread.
-            sleep(8);//设置一定时间启动视觉线程,并识别圆
+
+            sleep(10);//设置一定时间启动视觉线程,并识别圆
             //停止添加圆,然后开始识别字符
             updateellipse = true;
 
@@ -265,12 +271,12 @@ commands(Autopilot_Interface &api)
                 int TF=0;
                 stable = true;
                 mavlink_set_position_target_local_ned_t sp;
-                float Disx = target_ellipse_position[TargetNum].x - api.current_messages.local_position_ned.x;
-                float Disy = target_ellipse_position[TargetNum].y - api.current_messages.local_position_ned.y;
+                float Disx = target_ellipse_position[TargetNum].x ;
+                float Disy = target_ellipse_position[TargetNum].y ;
                 float Adisx = fabsf(Disx);
                 float Adisy = fabsf(Disy);
-
-                while((Adisx >= 2)||(Adisy >= 2))
+                int i = 0;
+                while((Adisx >= 10)||(Adisy >= 10))
                 {
 
                     if (Adisx >= Adisy)
@@ -285,12 +291,23 @@ commands(Autopilot_Interface &api)
                             sp);
                     api.update_local_setpoint(sp);
                     usleep(200000);
-                    Disx = target_ellipse_position[TargetNum].x - api.current_messages.local_position_ned.x;
-                    Disy = target_ellipse_position[TargetNum].y - api.current_messages.local_position_ned.y;
+                    Disx = target_ellipse_position[TargetNum].x ;
+                    Disy = target_ellipse_position[TargetNum].y ;
                     Adisx = fabsf(Disx);
                     Adisy = fabsf(Disy);
 
+                    i = i + 1;
+                    if(i >= 20)
+                    {
+                        i = 0;
+
+                        break;
+                    }
+
                 }
+                set_velocity(0,0,0,sp);
+                api.update_local_setpoint(sp);
+                usleep(100);
 
                 while (stable)
                 {
@@ -299,7 +316,7 @@ commands(Autopilot_Interface &api)
                     if (TF==10)
                     {
                         int TplusF = target_ellipse_position[TargetNum].T_N + target_ellipse_position[TargetNum].F_N;
-                        if(TplusF <= 10 )
+                        if(TplusF <= 5 )
                         {
                             break;
                         }
@@ -310,14 +327,47 @@ commands(Autopilot_Interface &api)
                     }
                     else
                     {
-                        ;
+                        Disx = target_ellipse_position[TargetNum].x ;
+                        Disy = target_ellipse_position[TargetNum].y ;
+                        Adisx = fabsf(Disx);
+                        Adisy = fabsf(Disy);
+
+                        while((Adisx >= 10)||(Adisy >= 10))
+                        {
+
+                            if (Adisx >= Adisy)
+                            {
+                                set_velocity(0.5*(Disx / Adisx),0.5*( Disy / Adisx), 0, sp);
+                            }
+                            else
+                            {
+                                set_velocity(0.5*(Disx / Adisy), 0.5*(Disy / Adisy), 0, sp);
+                            }
+                            set_yaw(yaw, // [rad]
+                                    sp);
+                            api.update_local_setpoint(sp);
+                            usleep(200000);
+                            Disx = target_ellipse_position[TargetNum].x ;
+                            Disy = target_ellipse_position[TargetNum].y ;
+                            Adisx = fabsf(Disx);
+                            Adisy = fabsf(Disy);
+
+                            i = i + 1;
+                            if(i >= 5)
+                            {
+                                i = 0;
+
+                                break;
+                            }
+
+                        };
                     }
                 }
                 if (ellipse_T.size() > TNum)
                 {
 
                     TNum = api.Throw(yaw,TNum);
-                    TargetNum = target_ellipse_position.size();
+                    TargetNum = TargetNum + 1;
                     detect= false;
                     flag = false;
                     break;
@@ -327,40 +377,21 @@ commands(Autopilot_Interface &api)
                     TargetNum = TargetNum + 1;
                 }
             }
-            t1.join();
+            t1.detach();
+            detect= false;
+            flag = false;
         }
     }
 
-    api.Set_Mode(05);
-    usleep(200);
-    api.Set_Mode(04);
-    usleep(200);
-    //返航高度
-    float High = 20;
-    mavlink_set_position_target_local_ned_t locsp;
-    set_velocity(0, 0, -1, locsp);
-    api.update_local_setpoint(locsp);
-    while((api.current_messages.local_position_ned.z + High) >=0)
-    {
-        api.update_local_setpoint(locsp);
-        usleep(200000);
-    }
-    set_velocity(0, 0, 0, locsp);
-    api.update_local_setpoint(locsp);
-    //返航
-    mavlink_command_long_t com3 = { 0 };
-    com3.target_system= 01;
-    com3.target_component = 01;
-    com3.command = 20;
+//    api.Set_Mode(05);
+//    usleep(200);
+//    api.Set_Mode(04);
+//    usleep(200);
 
-    mavlink_message_t message3;
-    mavlink_msg_command_long_encode(255, 190, &message3, &com3);
-
-    int len3 = api.write_message(message3);
-    while (len3 <= 0)
-    {
-        len3 = api.write_message(message3);
-    }
+    api.Set_Mode(06);
+    usleep(200);
+    api.Set_Mode(06);
+    usleep(200);
 
 
     // now pixhawk isn't listening to setpoint commands
@@ -502,6 +533,8 @@ void videothread(Autopilot_Interface& api){
     );
 
 Mat1b gray, gray_big;
+ofstream outf1;
+outf1.open("target_r.txt");
 VideoWriter writer1("小图.avi", CV_FOURCC('M', 'J', 'P', 'G'), 5.0, Size(640, 360));
 	while(true) {
 
@@ -519,10 +552,10 @@ VideoWriter writer1("小图.avi", CV_FOURCC('M', 'J', 'P', 'G'), 5.0, Size(640, 
         vector<coordinate> ellipse_out, ellipse_TF, ellipse_out1;
         if(getlocalposition){
             OptimizEllipse(ellipse_in, ellsYaed);//对椭圆检测部分得到的椭圆进行预处理，输出仅有大圆的vector
-            yaed->big_vector(resultImage2, ellipse_in, ellipse_big);
-            filtellipse(api, ellipseok, ellipse_big);
-            yaed->DrawDetectedEllipses(resultImage, ellipse_out, ellipseok);//绘制检测到的椭圆
             if (!drop) {
+            yaed->targetcolor(resultImage2, ellipse_in, ellipse_big);
+//            filtellipse(api, ellipseok, ellipse_big);
+            yaed->DrawDetectedEllipses(resultImage, ellipse_out, ellipse_big);//绘制检测到的椭圆
             vector<vector<Point> > contours;
             if (stable) {
                 yaed->extracrROI(gray_big, ellipse_out, img_roi);
@@ -541,41 +574,68 @@ VideoWriter writer1("小图.avi", CV_FOURCC('M', 'J', 'P', 'G'), 5.0, Size(640, 
                 resultTF(api, target_ellipse_position, ellipse_T, ellipse_F);
             }
         } else {
-            getdroptarget(api, droptarget, ellipse_out);
+                yaed->targetcolor(resultImage2, ellipse_in, ellipse_big);
+//                filtellipse(api, ellipseok, ellipse_big);
+                yaed->DrawDetectedEllipses(resultImage, ellipse_out, ellipse_big);//绘制检测到的椭圆
+                getdroptarget(api, droptarget, ellipse_out);
         }
     }
         cout << "target_ellipse.size = " << target_ellipse_position.size() << endl;
+        outf1 << "target_ellipse.size = " << target_ellipse_position.size() << endl;
         for (int i = 0; i < target_ellipse_position.size(); ++i) {
-            cout << "x = " << target_ellipse_position[i].x << endl
-                 << "y = " << target_ellipse_position[i].y << endl
+            cout << "x = " << target_ellipse_position[i].locx << endl
+                 << "y = " << target_ellipse_position[i].locy << endl
                  << "T = " << target_ellipse_position[i].T_N << endl
                  << "F = " << target_ellipse_position[i].F_N << endl
-                 << "possible = " << target_ellipse_position[i].possbile << endl;
+                 << "flag = " << target_ellipse_position[i].possbile << endl;
+            outf1 << "x = " << target_ellipse_position[i].locx << endl
+                  << "y = " << target_ellipse_position[i].locy << endl
+                  << "T = " << target_ellipse_position[i].T_N << endl
+                  << "F = " << target_ellipse_position[i].F_N << endl
+                  << "flag = " << target_ellipse_position[i].possbile << endl;
         }
         cout << "ellipse_T.size = " << ellipse_T.size() << endl;
+        outf1 << "ellipse_T.size = " << ellipse_T.size() << endl;
         for (int i = 0; i < ellipse_T.size(); ++i) {
-            cout << "x = " << ellipse_T[i].x << endl
-                 << "y = " << ellipse_T[i].y << endl
+            cout << "x = " << ellipse_T[i].locx << endl
+                 << "y = " << ellipse_T[i].locy << endl
                  << "possbile = " << ellipse_T[i].possbile << endl
                  << "lat:" << ellipse_T[i].lat << "lon:" << ellipse_T[i].lon << endl
                  <<"No.:"<<ellipse_T[i].num<<endl;
+            outf1 << "x = " << ellipse_T[i].locx << endl
+                  << "y = " << ellipse_T[i].locy << endl
+                  << "possbile = " << ellipse_T[i].possbile << endl
+                  << "lat:" << ellipse_T[i].lat << "lon:" << ellipse_T[i].lon << endl
+                  <<"No.:"<<ellipse_T[i].num<<endl;
         }
         cout << "ellipse_F.size = " << ellipse_F.size() << endl;
+        outf1 << "ellipse_F.size = " << ellipse_F.size() << endl;
         for (int i = 0; i < ellipse_F.size(); ++i) {
-            cout << "x = " << ellipse_F[i].x << endl
-                 << "y = " << ellipse_F[i].y << endl
+            cout << "x = " << ellipse_F[i].locx << endl
+                 << "y = " << ellipse_F[i].locy << endl
                  << "possbile = " << ellipse_F[i].possbile << endl
                  << "lat:" << ellipse_F[i].lat << "lon:" << ellipse_F[i].lon << endl
                  <<"No.:"<<ellipse_F[i].num<<endl;
+            outf1 << "x = " << ellipse_F[i].locx << endl
+                  << "y = " << ellipse_F[i].locy << endl
+                  << "possbile = " << ellipse_F[i].possbile << endl
+                  << "lat:" << ellipse_F[i].lat << "lon:" << ellipse_F[i].lon << endl
+                  <<"No.:"<<ellipse_F[i].num<<endl;
         }
         cout<<"local_position.x:"<<api.current_messages.local_position_ned.x<<endl
             <<"local_position.y:"<<api.current_messages.local_position_ned.y<<endl
             <<"local_position.z:"<<api.current_messages.local_position_ned.z<<endl;
         cout<<"stable:"<<stable<<endl<<"updateellipise:"<<updateellipse<<endl<<"drop:"<<drop<<endl;
+        cout<<"target_Num:"<<TargetNum<<endl;
+        outf1<<"local_position.x:"<<api.current_messages.local_position_ned.x<<endl
+             <<"local_position.y:"<<api.current_messages.local_position_ned.y<<endl
+             <<"local_position.z:"<<api.current_messages.local_position_ned.z<<endl;
+        outf1<<"stable:"<<stable<<endl<<"updateellipise:"<<updateellipse<<endl<<"drop:"<<drop<<endl;
+        outf1<<"target_Num:"<<TargetNum<<endl;
 //		namedWindow("原图",1);
 //		imshow("原图", image);
-		namedWindow("缩小",1);
-		imshow("缩小", resultImage);
+//		namedWindow("缩小",1);
+//		imshow("缩小", resultImage);
 		writer1.write(resultImage);
         ellipse_out.clear();
 		waitKey(10);

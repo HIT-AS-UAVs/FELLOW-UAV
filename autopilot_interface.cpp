@@ -76,10 +76,10 @@ float Distance(float x,float y,float z,float x1,float y1,float z1)
     //如果是经纬度*10^7，转化为m
     if (x > 10000)
     {
-        x = x*18.5/1000;
-        x1 = x1*18.5/1000;
-        y = y*14/1000;
-        y1 = y1*14/1000;
+        x = x*18.52/1000;
+        x1 = x1*18.52/1000;
+        y = y*14.2/1000;
+        y1 = y1*14.2/1000;
         z = z/1000.0;
         z1 = z1/1000.0;
     }
@@ -93,10 +93,10 @@ float Distance(float x,float y,float z,float x1,float y1,float z1)
 float XYDistance(float x, float y, float x1, float y1)
 {
     if (x > 10000) {
-        x = x * 18.5 / 1000;
-        x1 = x1 * 18.5 / 1000;
-        y = y * 14 / 1000;
-        y1 = y1 * 14 / 1000;
+        x = x * 18.52 / 1000;
+        x1 = x1 * 18.52 / 1000;
+        y = y * 14.2 / 1000;
+        y1 = y1 * 14.2 / 1000;
     }
     float Distance = fabsf(x - x1)+fabsf(y - y1);
     return Distance ;
@@ -680,6 +680,14 @@ WL_read_messages()
                             int RT = write_message(RTLL);
                             usleep(20000);
                         }
+
+                    }
+
+                    if((Inter_message.command_long.command == 183))
+                    {
+                        Servo_Control(11,1700);
+                        usleep(500000);
+                        Servo_Control(11,1250);
 
                     }
 
@@ -1329,7 +1337,7 @@ int
 Autopilot_Interface::
 Throw(float yaw,int Tnum)
 {
-	int local_alt = -8;
+	int local_alt = -22;
 	mavlink_set_position_target_local_ned_t locsp;
 	set_velocity(0, 0, 1, locsp);
 	set_yaw(yaw, locsp);
@@ -1345,33 +1353,13 @@ Throw(float yaw,int Tnum)
 		}
 		else
 		{
-            set_velocity(0, 0, 0.5, locsp);
+            set_velocity(0, 0, 1, locsp);
             set_yaw(yaw, locsp);
             update_local_setpoint(locsp);
 		    usleep(2000);
 		}
 	}
 
-    while((fabsf(current_messages.local_position_ned.x-target_ellipse_position[TargetNum].x)>=1)||(fabsf(current_messages.local_position_ned.y-target_ellipse_position[TargetNum].y)>=1))
-    {
-		float Disx = target_ellipse_position[TargetNum].x - current_messages.local_position_ned.x;
-		float Disy = target_ellipse_position[TargetNum].y - current_messages.local_position_ned.y;
-		float Adisx = fabsf(Disx);
-		float Adisy	= fabsf(Disy);
-
-		if(Adisx >= Adisy)
-		{
-			set_velocity(0.5*(Disx/Adisx),0.5*(Disy/Adisx),0,locsp);
-		}
-		else
-		{
-			set_velocity(0.5*(Disx/Adisy),0.5*(Disy/Adisy),0,locsp);
-		}
-		// SEND THE COMMAND
-		set_yaw(yaw,locsp);
-		update_local_setpoint(locsp);
-		usleep(200000);
-	}
 	//执行reng的过程
 	drop = true;
 	//给响应时间识别小圆,需加判断是否写入目标点
@@ -1397,10 +1385,7 @@ Throw(float yaw,int Tnum)
 //		float disy = locy - pos.y;
         float adisx = fabsf(locx);
         float adisy	= fabsf(locy);
-//    	locx = 2*locx-pos.x;
-//    	locy = 2*locy - pos.y;
-//    	locsp.x = locx;
-//    	locsp.y = locy;
+
         if(adisx >= adisy)
         {
             set_velocity(0.3*(locx /adisx),0.3*(locy/adisx),0,locsp);
@@ -1428,7 +1413,7 @@ Throw(float yaw,int Tnum)
 			sleep(1);
 			int lenn = Servo_Control(11, 1700);
 			Tnum = Tnum + 1;
-			sleep(1);
+//			sleep(1);
 			drop = false;
 			break;
 		}
@@ -1449,7 +1434,7 @@ ThrowF(float yaw,target* targetF)
     mavlink_set_position_target_local_ned_t losp;
     int T = 0;
     //detect hight
-    float hight = 20;
+    float hight = 30;
     Set_Mode(05);
     usleep(400);
     Set_Mode(04);
@@ -1682,18 +1667,26 @@ start_WL_write_thread(void *args)
 //  将当前时刻看到的所有可能为目标的椭圆存放在容器中
 // ------------------------------------------------------------------------------
 void possible_ellipse(Autopilot_Interface& api, vector<coordinate>& ellipse_out, vector<target>& target_ellipse){
-    float dis = 7;//在室外的参数圆心相距9米内都算一个圆
+    float dis = 5;//在室外的参数圆心相距9米内都算一个圆
 //	float dis = 0.05;//在室内测试用0.05
     for (auto &p:ellipse_out) {
-    	float x_l, y_l;
+    	float x_l, y_l, c_x, c_y, x_r, y_r;
+    	uint16_t hdg;
     	realtarget(api, p, x_l, y_l);
     	p.locx = x_l;
     	p.locy = y_l;
+        c_x = 180 - p.y;
+        c_y = p.x - 320;
+        hdg = api.current_messages.global_position_int.hdg;
+        x_r = c_x * cos(hdg * 3.1415926 / 180 / 100) - c_y * sin(hdg * 3.1415926 / 180 / 100);//单位是:像素
+        y_r = c_y * cos(hdg * 3.1415926 / 180 / 100) + c_x * sin(hdg * 3.1415926 / 180 / 100);
     	if (target_ellipse.size() == 0) {
                 target t;
-                t.x = p.locx;
-                t.y = p.locy;
+                t.locx = p.locx;
+                t.locy = p.locy;
                 t.a = p.a;
+                t.x = x_r;
+                t.y = y_r;
                 if (p.flag == 1)
                     t.T_N = 1;
                 else if (p.flag == 0)
@@ -1706,11 +1699,13 @@ void possible_ellipse(Autopilot_Interface& api, vector<coordinate>& ellipse_out,
             }
             if(stable == true || updateellipse == true) {
 				for (auto i = 0; i < target_ellipse.size(); i++){
-					if (abs(p.locx - target_ellipse[i].x) < dis &&
-						abs(p.locy - target_ellipse[i].y) < dis) {
-						target_ellipse[i].x = p.locx;
-						target_ellipse[i].y = p.locy;
+					if (abs(p.locx - target_ellipse[i].locx) < dis &&
+						abs(p.locy - target_ellipse[i].locy) < dis) {
+						target_ellipse[i].locx = p.locx;
+						target_ellipse[i].locy = p.locy;
 						target_ellipse[i].a = p.a;
+						target_ellipse[i].x = x_r;
+						target_ellipse[i].y = y_r;
 						if (p.flag == 1)
 							target_ellipse[i].T_N = target_ellipse[i].T_N + 1;
 						else if (p.flag == 0)
@@ -1725,11 +1720,13 @@ void possible_ellipse(Autopilot_Interface& api, vector<coordinate>& ellipse_out,
 			}
             } else {
 				for (auto i = 0; i < target_ellipse.size(); i++) {
-					if (abs(p.locx - target_ellipse[i].x) < dis &&
-						abs(p.locy - target_ellipse[i].y) < dis) {
-						target_ellipse[i].x = p.locx;
-						target_ellipse[i].y = p.locy;
+					if (abs(p.locx - target_ellipse[i].locx) < dis &&
+						abs(p.locy - target_ellipse[i].locy) < dis) {
+						target_ellipse[i].locx = p.locx;
+						target_ellipse[i].locy = p.locy;
 						target_ellipse[i].a = p.a;
+						target_ellipse[i].x = x_r;
+						target_ellipse[i].y = y_r;
 						if (p.flag == 1)
 							target_ellipse[i].T_N = target_ellipse[i].T_N + 1;
 						else if (p.flag == 0)
@@ -1742,9 +1739,11 @@ void possible_ellipse(Autopilot_Interface& api, vector<coordinate>& ellipse_out,
 						continue;
 					} else {
 						target t;
-						t.x = p.locx;
-						t.y = p.locy;
+						t.locx = p.locx;
+						t.locy = p.locy;
 						t.a = p.a;
+						t.x = x_r;
+						t.y = y_r;
 						if (p.flag == 1)
 							t.T_N = 1;
 						else if (p.flag == 0)
@@ -1762,29 +1761,35 @@ void possible_ellipse(Autopilot_Interface& api, vector<coordinate>& ellipse_out,
 void resultTF(Autopilot_Interface& api, vector<target>& ellipse_in, vector<target>& ellipse_1, vector<target>& ellipse_0){
 //	float possobile = 0.5, dis = 0.05;//室内测试设置0.5，0.05， 室外待定
 //	uint32_t num = 10;//室内测试设置10，室外待定
-	float possobile = 0.4, dis = 7;//室外测试：识别概率大于0.4都算作T，两圆圆心相距9米内都算一个圆
+	float possobile = 0.4, dis = 5;//室外测试：识别概率大于0.4都算作T，两圆圆心相距9米内都算一个圆
 	uint32_t num = 50;//室外测试：识别次数大于50次即可进行TF判断。
+	int temp;
 	if(ellipse_in.size() == 0){
 
 	} else {
-        target p = ellipse_in[0];
+        if(ellipse_in.size() == TargetNum ){
+            temp = TargetNum - 1;
+        } else{
+            temp = TargetNum;
+        }
+	    target p = ellipse_in[temp];
         if (p.possbile > possobile && p.T_N > num) {
             stable = false;
             if (ellipse_1.size() == 0) {
                 p.lat = api.current_messages.global_position_int.lat;
                 p.lon = api.current_messages.global_position_int.lon;
-                p.num = TargetNum;
+                p.num = temp;
                 ellipse_1.push_back(p);
             }
             for (auto t = 0; t < ellipse_1.size(); t++) {
-                if ((p.x - ellipse_1[t].x) < dis && (p.y - ellipse_1[t].y) < dis)
+                if (abs(p.locx - ellipse_1[t].locx) < dis && abs(p.locy - ellipse_1[t].locy) < dis)
                     break;
                 else if (t != (ellipse_1.size() - 1))
                     continue;
                 else {
                     p.lat = api.current_messages.global_position_int.lat;
                     p.lon = api.current_messages.global_position_int.lon;
-                    p.num = TargetNum;
+                    p.num = temp;
                     ellipse_1.push_back(p);
                     break;
                 }
@@ -1795,18 +1800,18 @@ void resultTF(Autopilot_Interface& api, vector<target>& ellipse_in, vector<targe
             if (ellipse_0.size() == 0) {
                 p.lat = api.current_messages.global_position_int.lat;
                 p.lon = api.current_messages.global_position_int.lon;
-                p.num = TargetNum;
+                p.num = temp;
                 ellipse_0.push_back(p);
             }
             for (auto f = 0; f < ellipse_0.size(); f++) {
-                if ((p.x - ellipse_0[f].x) < dis && (p.y - ellipse_0[f].y) < dis)
+                if (abs(p.locx - ellipse_0[f].locx) < dis && abs(p.locy - ellipse_0[f].locy) < dis)
                     break;
                 else if (f != (ellipse_0.size() - 1))
                     continue;
                 else {
                     p.lat = api.current_messages.global_position_int.lat;
                     p.lon = api.current_messages.global_position_int.lon;
-                    p.num = TargetNum;
+                    p.num = temp;
                     ellipse_0.push_back(p);
                     break;
                 }
@@ -1818,17 +1823,27 @@ void resultTF(Autopilot_Interface& api, vector<target>& ellipse_in, vector<targe
 
 void getdroptarget(Autopilot_Interface& api, coordinate& droptarget, vector<coordinate>& ellipse_out) {
     if (ellipse_out.size() != 0){
-    	float dis = 7;
+    	float dis = 5;
         sort(ellipse_out.begin(),ellipse_out.end());
-        float e_x, e_y, locx, locy;
+        float e_x, e_y, locx, locy, c_x, c_y, x_r, y_r;
+        uint16_t hdg;
         realtarget(api, ellipse_out[0], e_x, e_y);
         locx = api.current_messages.local_position_ned.x;
         locy = api.current_messages.local_position_ned.y;
+        c_x = 180 - ellipse_out[0].y;
+        c_y = ellipse_out[0].x - 320;
+        hdg = api.current_messages.global_position_int.hdg;
+        x_r = c_x * cos(hdg * 3.1415926 / 180 / 100) - c_y * sin(hdg * 3.1415926 / 180 / 100);//单位是:像素
+        y_r = c_y * cos(hdg * 3.1415926 / 180 / 100) + c_x * sin(hdg * 3.1415926 / 180 / 100);
         if(abs(e_x - locx) < dis && abs(e_y - locy) < dis){
         	droptarget.locx = e_x;
         	droptarget.locy = e_y;
+            droptarget.x = x_r;
+            droptarget.y = y_r;
 			cout << "target_x" << droptarget.locx << endl;
 			cout << "target_y" << droptarget.locy << endl;
+            cout << "cam_x" << droptarget.x << endl;
+            cout << "cam_y" << droptarget.y << endl;
         } else{
 			cout << "target_x" << droptarget.locx << endl;
 			cout << "target_y" << droptarget.locy << endl;
@@ -1842,6 +1857,8 @@ void getdroptarget(Autopilot_Interface& api, coordinate& droptarget, vector<coor
 
 void realtarget(Autopilot_Interface& api, coordinate& cam, float& x_l, float& y_l){
     int32_t h = -api.current_messages.local_position_ned.z;
+    int32_t h_diff = -12;//目标高度比起飞高度低了5米
+            h = h + h_diff;
 //        int32_t h = 25;//桌子高度0.74M
     uint16_t hdg = api.current_messages.global_position_int.hdg;
 //        uint16_t hdg = 0;//设置机头方向为正北
@@ -1860,7 +1877,7 @@ void realtarget(Autopilot_Interface& api, coordinate& cam, float& x_l, float& y_
 }
 
 void OptimizEllipse(vector<Ellipse> &ellipse_out, vector<Ellipse> &ellipses_in){
-	float score = 0.7, e = 0.3;
+	float score = 0.6, e = 0.3;
 	/***************************去掉评分不佳的椭圆********************************************/
 	vector<Ellipse> e0,v1, v2;//存放去掉评分小于0.8的椭圆
 	for(auto i = ellipses_in.begin(); i != ellipses_in.end(); ++i){
@@ -1880,7 +1897,7 @@ void OptimizEllipse(vector<Ellipse> &ellipse_out, vector<Ellipse> &ellipses_in){
 		}
 	}
 
-
+/*
 	for(auto &p:e0){
 		if(v1.size() == 0){
 			v1.push_back(p);
@@ -1897,7 +1914,8 @@ void OptimizEllipse(vector<Ellipse> &ellipse_out, vector<Ellipse> &ellipses_in){
 			}
 		}
 	}
-ellipse_out = v1;
+ */
+ellipse_out = e0;
 
 }
 /*将得到的圆放入vector中，并对其中数量大于一定范围的圆进行下一步处理，以滤除偶然检测出的圆*/
@@ -1949,7 +1967,7 @@ void filtellipse(Autopilot_Interface& api, vector<Ellipse>& ellipseok, vector<El
 			float disx = (p._xc - q.x) / p._a;
 			float disy = (p._yc - q.y) / p._b;
 			float thresh = 0.9;//该值应小于1
-			if( (disx < thresh && disy < thresh) && (q.possible > 0.1 && q.num > 5)){
+			if( (disx < thresh && disy < thresh) && (q.possible > 0.1 && q.num > 2)){
 				ellipseok.push_back(p);
 				break;
 			} else
@@ -1976,10 +1994,10 @@ void nearellipse(Autopilot_Interface& api, vector<target>& target_ellipse){
 	if(size == 0 || size == 1){
 
 	} else {
-		for (auto i = 0; i < target_ellipse.size() - 1; i++) {
-			for (auto j = 0; j < target_ellipse.size() - i - 1; j++){
-				float jdis = ellipsedistance(locx, locy, target_ellipse[j].x, target_ellipse[j].y);
-				float jplusdis = ellipsedistance(locx, locy, target_ellipse[j + 1].x, target_ellipse[j + 1].y);
+		for (auto i = 0; i < size - 1; i++) {
+			for (auto j = 0; j < size - i - 1; j++){
+				float jdis = ellipsedistance(locx, locy, target_ellipse[j].locx, target_ellipse[j].locy);
+				float jplusdis = ellipsedistance(locx, locy, target_ellipse[j + 1].locx, target_ellipse[j + 1].locy);
 				if(jdis > jplusdis){
 					swap(target_ellipse[j], target_ellipse[j+1]);
 				}

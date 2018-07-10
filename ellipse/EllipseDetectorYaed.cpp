@@ -2155,3 +2155,141 @@ void visual_rec(vector<Mat1b>& gray, vector<coordinate>& ellipse_out0, vector<co
 	}
 }
 
+void CEllipseDetectorYaed::targetcolor(Mat3b& resultImage2, vector< Ellipse >& ellipse_in, vector< Ellipse >& ellipse_big)
+{
+    CEllipseDetectorYaed* gv;
+    Mat3b ROI;
+
+    for(int i = 0; i < ellipse_in.size(); i++)
+    {
+        int x_l=ellipse_in[i]._xc - ellipse_in[i]._a;
+        int y_l=ellipse_in[i]._yc - ellipse_in[i]._b;
+        int width_roi=abs(2 * ellipse_in[i]._a);
+        int height_roi=abs(2 * ellipse_in[i]._b);
+
+        if((x_l>=0)&&(y_l>=0)&&((x_l+width_roi)<=resultImage2.cols)&&((y_l+height_roi)<=resultImage2.rows))
+        {
+            ROI=resultImage2(Rect(x_l, y_l, width_roi, height_roi));
+            bool use;
+            use = gv->computetargetcolorpercentage(ROI, ellipse_in[i]);
+            if(use){
+                ellipse_big.push_back(ellipse_in[i]);
+            } else
+                continue;
+
+        }
+        else
+        {
+            continue;
+        }
+    }
+}
+
+bool CEllipseDetectorYaed::computetargetcolorpercentage(Mat3b& roi, Ellipse& ell_in)
+{
+    //############################蓝色百分比##################################
+
+    Mat imageth_r, imageth_b;
+
+    //红色为0°，绿色为120°,蓝色为240°。它们的补色是：黄色为60°，青色为180°,品红为300°；
+    //给出希望保留的hsv的取值范围
+    int iLowH_b = 0;//zwy:100;浅色圆：0；
+    int iHighH_b = 127.5;//张婉莹：125；浅色圆：239
+    int iLowS_b = 0;//张婉莹：15；浅色圆17
+    int iHighS_b = 255;//值越大，颜色越饱和张婉莹：240；浅色圆：145
+    int iLowV_b = 106;//值越小越黑张婉莹：20；浅色圆：0
+    int iHighV_b = 250;//张婉莹：255
+
+    //############################红色百分比##################################
+    //红色为0°，绿色为120°,蓝色为240°。它们的补色是：黄色为60°，青色为180°,品红为300°；
+    //给出希望保留的hsv的取值范围
+    int iLowH_r = 131.5;//0
+    int iHighH_r = 176;//224
+    int iLowS_r = 0;//29
+    int iHighS_r = 255;//值越大，颜色越饱和218
+    int iLowV_r = 106;//值越小越黑235
+    int iHighV_r = 250;//255
+
+
+    //计算像素总数,椭圆面积
+    int width_b,height_b;
+    float rect_S,a_b,b_b;
+    width_b = roi.cols;
+    height_b = roi.rows;
+    a_b=ell_in._a;
+    b_b=ell_in._b;
+    rect_S = 4 * a_b * b_b;
+
+    //对原始图像进行高斯滤波
+    GaussianBlur(roi, roi,Size(5,5),0,0);
+    cvtColor(roi, roi, COLOR_BGR2HSV);
+
+    //按阈值分割
+    inRange(roi, Scalar(iLowH_b, iLowS_b, iLowV_b), Scalar(iHighH_b, iHighS_b, iHighV_b), imageth_b);//提取出的蓝色为白色部分
+    inRange(roi, Scalar(iLowH_r, iLowS_r, iLowV_r), Scalar(iHighH_r, iHighS_r, iHighV_r), imageth_r);//提取出的红色为黑色部分
+
+    float add_r = 0,add_b = 0;
+    for(int i = 0;i < height_b; i++)
+    {
+        for(int j = 0;j < width_b; j++)
+        {
+            // 若像素值为255，add加一
+            if(imageth_r.at<uchar>(i,j) == 255)
+            {
+                add_r++;
+            } else{
+            }
+        }
+    }
+
+    for(int i = 0;i < height_b; i++)
+    {
+        for(int j = 0;j < width_b; j++)
+        {
+            // 若像素值为255，add加一
+            if(imageth_b.at<uchar>(i,j) == 255)
+            {
+                add_b++;
+            } else{
+            }
+        }
+    }
+
+    //-------------------计算百分比-------------------------
+    //定义并计算百分比
+    float percentage_blue;
+    percentage_blue = add_b / rect_S * 100;
+
+
+    //############################蓝色百分比##################################
+
+    //-------------------计算百分比-------------------------
+    //定义并计算百分比，此时计算的是降噪后的结果
+    float percentage_red;
+    percentage_red = add_r / rect_S * 100;
+/*
+	white.push_back(percentage_white);
+	color.push_back(percentage_color);
+	sort(white.begin(), white.end());
+	sort(color.begin(), color.end());
+	cout<<"white_l"<<white[0]<<endl;
+	cout<<"white_h"<<white[white.size() - 1]<<endl;
+	cout<<"color_l"<<color[0]<<endl;
+	cout<<"color_h"<<color[color.size() - 1]<<endl;
+	imshow("HSV提取", imageth_r);
+//	cout<<"大圆面积为"<<ell_S_b<<endl;
+//	cout<<"彩色占大圆比例为："<<percentage_color<<"%"<<endl;
+//	cout<<"白色占圆比例为："<< percentage_white <<"%"<<endl;
+*/
+    if(((percentage_blue>=61)&&(percentage_red>= 4)&&(percentage_blue<=95)&&(percentage_red<=28))
+       ||((percentage_blue>=5)&&(percentage_red>= 58)&&(percentage_blue<=46)&&(percentage_red<=96)))
+    {
+
+        return true;
+    }
+    else
+    {
+        return false;
+    }
+
+}
